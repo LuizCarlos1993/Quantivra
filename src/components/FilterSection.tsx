@@ -44,7 +44,7 @@ export function FilterSection({
 
         <div className="flex flex-col gap-1">
           <label className="text-xs text-gray-600 font-medium">
-            Período de Visualização
+            Data de Visualização
           </label>
           <input
             type="date"

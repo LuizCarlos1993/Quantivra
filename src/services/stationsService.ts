@@ -54,6 +54,20 @@ function paramStatus(param: string, value: number): string {
 }
 
 export const stationsService = {
+  async getStationIdByName(name: string): Promise<string | null> {
+    const { data } = await supabase.from('stations').select('id').eq('name', name).single()
+    return data?.id ?? null
+  },
+
+  async getAllStationNames(): Promise<string[]> {
+    const { data } = await supabase
+      .from('stations')
+      .select('name')
+      .eq('status', 'active')
+      .order('name')
+    return data?.map((s) => s.name) ?? []
+  },
+
   async getStationsByUnit(unit: string): Promise<string[]> {
     const { data } = await supabase
       .from('stations')

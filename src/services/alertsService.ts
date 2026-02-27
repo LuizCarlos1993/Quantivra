@@ -62,4 +62,13 @@ export const alertsService = {
   async markAllAsRead(): Promise<void> {
     await supabase.from('alerts').update({ read: true }).eq('read', false)
   },
+
+  async markAlertsAsReadForStationParameter(stationId: string, parameter: string): Promise<void> {
+    await supabase
+      .from('alerts')
+      .update({ read: true })
+      .eq('station_id', stationId)
+      .eq('parameter', parameter)
+      .eq('read', false)
+  },
 }

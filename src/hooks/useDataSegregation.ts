@@ -8,31 +8,40 @@ export function useDataSegregation() {
   const [stationsByUnit, setStationsByUnit] = useState<Record<string, string[]>>({})
 
   useEffect(() => {
-    if (!userUnit) return
-    stationsService.getStationsByUnit(userUnit).then((stations) => {
-      setStationsByUnit((prev) => ({ ...prev, [userUnit]: stations }))
-    })
-  }, [userUnit])
+    if (!user) return
+    if (userUnit) {
+      stationsService.getStationsByUnit(userUnit).then((stations) => {
+        setStationsByUnit((prev) => ({ ...prev, [userUnit]: stations }))
+      })
+    } else {
+      stationsService.getAllStationNames().then((names) => {
+        setStationsByUnit((prev) => ({ ...prev, __all__: names }))
+      })
+    }
+  }, [user, userUnit])
 
   const getAccessibleStations = useCallback((): string[] => {
-    return stationsByUnit[userUnit] ?? []
+    const byUnit = stationsByUnit[userUnit]
+    if (byUnit?.length) return byUnit
+    return stationsByUnit.__all__ ?? []
   }, [userUnit, stationsByUnit])
 
   const canAccessStation = useCallback(
     (stationName: string): boolean => {
-      return (stationsByUnit[userUnit] ?? []).includes(stationName)
+      const stations = stationsByUnit[userUnit] ?? stationsByUnit.__all__ ?? []
+      return stations.includes(stationName)
     },
     [userUnit, stationsByUnit]
   )
 
   const getDefaultStation = useCallback((): string => {
-    const stations = stationsByUnit[userUnit] ?? []
+    const stations = stationsByUnit[userUnit] ?? stationsByUnit.__all__ ?? []
     return stations[0] ?? ''
   }, [userUnit, stationsByUnit])
 
   const filterStations = useCallback(
     (stations: string[]): string[] => {
-      const accessible = stationsByUnit[userUnit] ?? []
+      const accessible = stationsByUnit[userUnit] ?? stationsByUnit.__all__ ?? []
       return stations.filter((s) => accessible.includes(s))
     },
     [userUnit, stationsByUnit]
@@ -49,6 +58,8 @@ export function useDataSegregation() {
     getDefaultStation,
     filterStations,
     getAccessibleUnits,
-    isLoading: userUnit !== '' && !stationsByUnit[userUnit],
+    isLoading: Boolean(
+      (userUnit ? !stationsByUnit[userUnit] : !stationsByUnit.__all__) && user
+    ),
   }
 }

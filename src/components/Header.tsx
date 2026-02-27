@@ -38,7 +38,12 @@ export function Header({ title, subtitle, onAlertClick }: HeaderProps) {
   useEffect(() => {
     loadAlerts()
     const interval = setInterval(loadAlerts, 60000)
-    return () => clearInterval(interval)
+    const onAlertsChanged = () => loadAlerts()
+    window.addEventListener('quantivra:alerts-changed', onAlertsChanged)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('quantivra:alerts-changed', onAlertsChanged)
+    }
   }, [loadAlerts])
 
   const alertCount = alerts.length

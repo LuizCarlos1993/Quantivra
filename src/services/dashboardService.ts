@@ -18,6 +18,8 @@ const PARAM_DISPLAY: Record<string, { label: string; unit: string }> = {
   NOx: { label: 'Dióxido de Nitrogênio (NO₂)', unit: 'µg/m³' },
   CO: { label: 'Monóxido de Carbono (CO)', unit: 'mg/m³' },
   SO2: { label: 'Dióxido de Enxofre (SO₂)', unit: 'µg/m³' },
+  BTEX: { label: 'BTEX', unit: 'µg/m³' },
+  HCT: { label: 'HCT', unit: 'µg/m³' },
 }
 
 const PARAM_THRESHOLDS: Record<string, { alert: number; critical: number }> = {
@@ -27,6 +29,8 @@ const PARAM_THRESHOLDS: Record<string, { alert: number; critical: number }> = {
   NOx: { alert: 150, critical: 300 },
   CO: { alert: 3, critical: 9 },
   SO2: { alert: 100, critical: 200 },
+  BTEX: { alert: 170, critical: 340 },
+  HCT: { alert: 5, critical: 10 },
 }
 
 function classifyIQAr(value: number): { quality: string; color: string } {
@@ -97,11 +101,11 @@ export const dashboardService = {
     const sensorIds = Array.from(sensorMap.values())
     const { data: rawRows } = await supabase
       .from('raw_data')
-      .select('sensor_id, value, timestamp')
+      .select('sensor_id, value, measured_at, timestamp')
       .in('sensor_id', sensorIds)
-      .gte('timestamp', dayStart)
-      .lte('timestamp', dayEnd)
-      .order('timestamp', { ascending: true })
+      .gte('measured_at', dayStart)
+      .lte('measured_at', dayEnd)
+      .order('measured_at', { ascending: true })
 
     const sensorIdToParam = new Map<string, string>()
     for (const [param, id] of sensorMap.entries()) {
@@ -127,7 +131,7 @@ export const dashboardService = {
       }
 
       if (param === 'wind_speed') {
-        const ts = new Date(row.timestamp)
+        const ts = new Date(row.measured_at ?? row.timestamp)
         const hourKey = `${ts.getHours().toString().padStart(2, '0')}h`
         const vals = timelineMap.get(hourKey) ?? []
         vals.push(row.value)
@@ -135,7 +139,7 @@ export const dashboardService = {
       }
 
       if (param === 'MP10') {
-        const ts = new Date(row.timestamp)
+        const ts = new Date(row.measured_at ?? row.timestamp)
         const hourKey = `${ts.getHours().toString().padStart(2, '0')}h`
         const vals = timelineMap.get(hourKey) ?? []
         vals.push(row.value)
@@ -161,22 +165,29 @@ export const dashboardService = {
     const windData: { direction: string; velocity: number }[] = []
     const pollutantData: { direction: string; concentration: number }[] = []
 
+    const getRowTime = (r: { measured_at?: string | null; timestamp?: string | null }) =>
+      new Date(r.measured_at ?? r.timestamp ?? 0).getTime()
+
     for (const dir of DIRECTIONS) {
       const dirReadings = windDirReadings.filter((r) => directionBucket(r.value) === dir)
       const matchedSpeeds = dirReadings.map((dr) => {
-        const closest = windSpdReadings.reduce((best, sr) =>
-          Math.abs(new Date(sr.timestamp).getTime() - new Date(dr.timestamp).getTime()) <
-          Math.abs(new Date(best.timestamp).getTime() - new Date(dr.timestamp).getTime()) ? sr : best,
-          windSpdReadings[0]
-        )
+        const drTime = getRowTime(dr)
+        const closest =
+          windSpdReadings.length > 0
+            ? windSpdReadings.reduce((best, sr) =>
+                Math.abs(getRowTime(sr) - drTime) < Math.abs(getRowTime(best) - drTime) ? sr : best
+              )
+            : null
         return closest?.value ?? 0
       })
       const matchedPollutants = dirReadings.map((dr) => {
-        const closest = mp10Readings.reduce((best, pr) =>
-          Math.abs(new Date(pr.timestamp).getTime() - new Date(dr.timestamp).getTime()) <
-          Math.abs(new Date(best.timestamp).getTime() - new Date(dr.timestamp).getTime()) ? pr : best,
-          mp10Readings[0]
-        )
+        const drTime = getRowTime(dr)
+        const closest =
+          mp10Readings.length > 0
+            ? mp10Readings.reduce((best, pr) =>
+                Math.abs(getRowTime(pr) - drTime) < Math.abs(getRowTime(best) - drTime) ? pr : best
+              )
+            : null
         return closest?.value ?? 0
       })
 

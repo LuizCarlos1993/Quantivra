@@ -293,14 +293,15 @@ END $$;
 -- ============================================
 -- 9. Seed alerts (Header allAlerts do mockup)
 -- ============================================
+-- Alertas com parâmetros que existem na estação (para clicar e abrir Consistência)
 INSERT INTO alerts (station_id, parameter, type, message, severity, read, created_at) VALUES
-  ('b1000000-0000-0000-0000-000000000001', 'SO2', 'threshold_exceeded', 'Valor Crítico de SO₂ (250 µg/m³)', 'critical', false, now() - interval '5 minutes'),
-  ('b1000000-0000-0000-0000-000000000001', 'SO2', 'threshold_exceeded', 'Valor Elevado: SO₂ (180.0 µg/m³)', 'warning', false, now() - interval '8 minutes'),
-  ('b1000000-0000-0000-0000-000000000001', 'SO2', 'anomaly', 'Valor Suspeito: SO₂ (125.0 µg/m³)', 'warning', false, now() - interval '10 minutes'),
+  ('b1000000-0000-0000-0000-000000000001', 'MP10', 'threshold_exceeded', 'Valor elevado de MP₁₀ - Requer validação', 'critical', false, now() - interval '5 minutes'),
+  ('b1000000-0000-0000-0000-000000000001', 'MP10', 'anomaly', 'Valor suspeito de MP₁₀ - Pendente invalidação', 'warning', false, now() - interval '8 minutes'),
+  ('b1000000-0000-0000-0000-000000000001', 'O3', 'anomaly', 'Valor Suspeito: O₃ (125.0 µg/m³)', 'warning', false, now() - interval '10 minutes'),
   ('b1000000-0000-0000-0000-000000000003', 'MP10', 'anomaly', 'Anomalia Crítica: MP₁₀ (999.9 µg/m³)', 'critical', false, now() - interval '8 minutes'),
-  ('b1000000-0000-0000-0000-000000000003', 'MP10', 'anomaly', 'Valor Suspeito: MP₁₀ (850.0 µg/m³)', 'warning', false, now() - interval '9 minutes'),
+  ('b1000000-0000-0000-0000-000000000003', 'SO2', 'threshold_exceeded', 'Valor Elevado: SO₂ (180.0 µg/m³)', 'warning', false, now() - interval '9 minutes'),
   ('b1000000-0000-0000-0000-000000000002', 'O3', 'flatline', 'Ausência de dados / Flatline em O₃', 'warning', false, now() - interval '12 minutes'),
-  ('b1000000-0000-0000-0000-000000000002', 'CO', 'threshold_exceeded', 'Valor Elevado: CO (8.5 ppm)', 'warning', false, now() - interval '18 minutes'),
+  ('b1000000-0000-0000-0000-000000000003', 'CO', 'threshold_exceeded', 'Valor Elevado: CO (8.5 ppm)', 'warning', false, now() - interval '18 minutes'),
   ('b1000000-0000-0000-0000-000000000004', 'NOx', 'calibration', 'Período de Calibração Detectado em NOx', 'info', false, now() - interval '15 minutes');
 
 SELECT 'Seed mockup concluído! Dados fictícios do Figma carregados.' AS result;

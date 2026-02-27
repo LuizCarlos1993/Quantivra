@@ -15,9 +15,13 @@ import { toast } from 'sonner'
 import {
   generateConsistencyData,
   aggregateDataByGranularity,
+  persistInvalidation,
   type DataRow,
 } from '@/services/consistencyService'
-import { PARAMETERS } from '@/config/stations'
+import { alertsService } from '@/services/alertsService'
+import { stationsService } from '@/services/stationsService'
+import { useAuth } from '@/modules/auth/context/AuthContext'
+import { PARAMETERS, DISPLAY_TO_PARAM_KEY } from '@/config/stations'
 
 interface ConsistencyPageProps {
   initialStation?: string
@@ -32,6 +36,7 @@ export function ConsistencyPage({
   initialTab = 'explorer',
   triggerTimestamp,
 }: ConsistencyPageProps) {
+  const { user } = useAuth()
   const { isReadOnly } = usePermissions()
   const { getAccessibleStations } = useDataSegregation()
   const accessibleStations = getAccessibleStations()
@@ -96,50 +101,73 @@ export function ConsistencyPage({
     setValidatedRows(aggregateDataByGranularity(dataRows, timeGranularity))
   }, [dataRows, timeGranularity])
 
-  const handleConfirmInvalidation = () => {
-    if (selectedRowId && selectedJustification) {
-      setValidatedRows((prev) =>
-        prev.map((row) =>
-          row.id === selectedRowId
-            ? {
-                ...row,
-                status: 'invalid' as const,
-                justification: selectedJustification,
-                operator: 'Carlos Silva (Admin)',
-                finalValue: '-',
-              }
-            : row
-        )
-      )
-      setIsInvalidateModalOpen(false)
-      setSelectedRowId(null)
-      setSelectedJustification('')
-      setSelectedObservations('')
-      toast.success('Dado invalidado com sucesso')
+  const tryMarkAlertsReadIfNoPending = (nextRows: DataRow[]) => {
+    const stillPending = nextRows.some((r) => r.status === 'pending')
+    if (!stillPending && selectedStation) {
+      stationsService.getStationIdByName(selectedStation).then((stationId) => {
+        if (stationId) {
+          const paramKey = DISPLAY_TO_PARAM_KEY[selectedParameter] ?? selectedParameter
+          alertsService.markAlertsAsReadForStationParameter(stationId, paramKey)
+          window.dispatchEvent(new CustomEvent('quantivra:alerts-changed'))
+        }
+      })
     }
   }
 
-  const handleBatchInvalidation = () => {
-    if (selectedCheckboxes.length > 0 && batchJustification) {
-      setValidatedRows((prev) =>
-        prev.map((row) =>
-          selectedCheckboxes.includes(row.id)
-            ? {
-                ...row,
-                status: 'invalid' as const,
-                justification: batchJustification,
-                operator: 'Carlos Silva (Admin)',
-                finalValue: '-',
-              }
-            : row
-        )
-      )
-      setIsBatchModalOpen(false)
-      setSelectedCheckboxes([])
-      setBatchJustification('')
-      setBatchObservations('')
-      toast.success('Dados invalidados em lote')
+  const handleConfirmInvalidation = async () => {
+    if (!selectedRowId || !selectedJustification) return
+    const row = validatedRows.find((r) => r.id === selectedRowId)
+    const rawIds = row ? (row.rawDataIds ?? (row.rawDataId ? [row.rawDataId] : [])) : []
+    if (rawIds.length && user?.id) {
+      await persistInvalidation(rawIds, selectedJustification, user.id)
     }
+    const nextRows = validatedRows.map((r) =>
+      r.id === selectedRowId
+        ? {
+            ...r,
+            status: 'invalid' as const,
+            justification: selectedJustification,
+            operator: user?.name ?? 'Sistema',
+            finalValue: '-',
+          }
+        : r
+    )
+    setValidatedRows(nextRows)
+    tryMarkAlertsReadIfNoPending(nextRows)
+    setIsInvalidateModalOpen(false)
+    setSelectedRowId(null)
+    setSelectedJustification('')
+    setSelectedObservations('')
+    toast.success('Dado invalidado com sucesso')
+  }
+
+  const handleBatchInvalidation = async () => {
+    if (selectedCheckboxes.length === 0 || !batchJustification) return
+    const rowsToInvalidate = validatedRows.filter((r) => selectedCheckboxes.includes(r.id))
+    const allRawIds = rowsToInvalidate.flatMap((r) =>
+      r.rawDataIds ?? (r.rawDataId ? [r.rawDataId] : [])
+    )
+    if (allRawIds.length && user?.id) {
+      await persistInvalidation(allRawIds, batchJustification, user.id)
+    }
+    const nextRows = validatedRows.map((row) =>
+      selectedCheckboxes.includes(row.id)
+        ? {
+            ...row,
+            status: 'invalid' as const,
+            justification: batchJustification,
+            operator: user?.name ?? 'Sistema',
+            finalValue: '-',
+          }
+        : row
+    )
+    setValidatedRows(nextRows)
+    tryMarkAlertsReadIfNoPending(nextRows)
+    setIsBatchModalOpen(false)
+    setSelectedCheckboxes([])
+    setBatchJustification('')
+    setBatchObservations('')
+    toast.success('Dados invalidados em lote')
   }
 
   const handleRevertInvalidation = (rowId: number) => {

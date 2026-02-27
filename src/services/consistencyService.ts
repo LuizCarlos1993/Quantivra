@@ -12,6 +12,8 @@ export interface DataRow {
   alertId?: number
   parameter?: string
   rawDataId?: string
+  /** IDs de raw_data para invalidar (quando agregado, pode ter vários) */
+  rawDataIds?: string[]
 }
 
 const PARAM_UNITS: Record<string, string> = {
@@ -83,10 +85,10 @@ export async function generateConsistencyData(
 
   const { data: rawRows } = await supabase
     .from('raw_data')
-    .select('id, value, timestamp')
+    .select('id, value, measured_at, timestamp')
     .eq('sensor_id', ids.sensorId)
-    .gte('timestamp', since)
-    .order('timestamp', { ascending: true })
+    .gte('measured_at', since)
+    .order('measured_at', { ascending: true })
     .limit(500)
 
   if (!rawRows?.length) return []
@@ -94,7 +96,7 @@ export async function generateConsistencyData(
   const rawIds = rawRows.map((r) => r.id)
   const { data: validations } = await supabase
     .from('validated_data')
-    .select('raw_data_id, is_valid, justification, operator_id')
+    .select('raw_data_id, validation_status, invalidation_reason, validated_by')
     .in('raw_data_id', rawIds)
 
   const validationMap = new Map(
@@ -105,21 +107,23 @@ export async function generateConsistencyData(
 
   return rawRows.map((row, index) => {
     const validation = validationMap.get(row.id)
-    let status: DataRow['status'] = 'valid'
+    let status: DataRow['status'] = 'pending'
     let justification = '-'
     let operator = 'Sistema'
 
     if (validation) {
-      status = validation.is_valid ? 'valid' : 'invalid'
-      justification = validation.justification || '-'
-      operator = validation.operator_id || 'Sistema'
+      const v = validation as { validation_status?: string; invalidation_reason?: string; validated_by?: string }
+      status = v.validation_status === 'VALID' ? 'valid' : v.validation_status === 'INVALID' ? 'invalid' : 'pending'
+      justification = v.invalidation_reason || '-'
+      operator = v.validated_by || 'Sistema'
     }
 
     const valueStr = row.value.toFixed(1)
+    const rowTs = row.measured_at ?? row.timestamp
 
     return {
       id: index + 1,
-      dateTime: formatDateTime(row.timestamp),
+      dateTime: formatDateTime(rowTs),
       rawValue: valueStr,
       finalValue: status === 'invalid' ? '-' : valueStr,
       unit,
@@ -127,6 +131,7 @@ export async function generateConsistencyData(
       justification,
       operator,
       rawDataId: row.id,
+      rawDataIds: [row.id],
     }
   })
 }
@@ -144,11 +149,11 @@ export async function generateDataBetweenDates(
 
   const { data: rawRows } = await supabase
     .from('raw_data')
-    .select('id, value, timestamp')
+    .select('id, value, measured_at, timestamp')
     .eq('sensor_id', ids.sensorId)
-    .gte('timestamp', startDate.toISOString())
-    .lte('timestamp', endDate.toISOString())
-    .order('timestamp', { ascending: true })
+    .gte('measured_at', startDate.toISOString())
+    .lte('measured_at', endDate.toISOString())
+    .order('measured_at', { ascending: true })
     .limit(2000)
 
   if (!rawRows?.length) return []
@@ -156,7 +161,7 @@ export async function generateDataBetweenDates(
   const rawIds = rawRows.map((r) => r.id)
   const { data: validations } = await supabase
     .from('validated_data')
-    .select('raw_data_id, is_valid, justification, operator_id')
+    .select('raw_data_id, validation_status, invalidation_reason, validated_by')
     .in('raw_data_id', rawIds)
 
   const validationMap = new Map(
@@ -167,21 +172,23 @@ export async function generateDataBetweenDates(
 
   return rawRows.map((row, index) => {
     const validation = validationMap.get(row.id)
-    let status: DataRow['status'] = 'valid'
+    let status: DataRow['status'] = 'pending'
     let justification = '-'
     let operator = 'Sistema'
 
     if (validation) {
-      status = validation.is_valid ? 'valid' : 'invalid'
-      justification = validation.justification || '-'
-      operator = validation.operator_id || 'Sistema'
+      const v = validation as { validation_status?: string; invalidation_reason?: string; validated_by?: string }
+      status = v.validation_status === 'VALID' ? 'valid' : v.validation_status === 'INVALID' ? 'invalid' : 'pending'
+      justification = v.invalidation_reason || '-'
+      operator = v.validated_by || 'Sistema'
     }
 
     const valueStr = row.value.toFixed(1)
+    const rowTs = row.measured_at ?? row.timestamp
 
     return {
       id: index + 1,
-      dateTime: formatDateTime(row.timestamp),
+      dateTime: formatDateTime(rowTs),
       rawValue: valueStr,
       finalValue: status === 'invalid' ? '-' : valueStr,
       unit,
@@ -189,7 +196,27 @@ export async function generateDataBetweenDates(
       justification,
       operator,
       rawDataId: row.id,
+      rawDataIds: [row.id],
     }
+  })
+}
+
+export async function persistInvalidation(
+  rawDataIds: string[],
+  justification: string,
+  userId: string | null
+): Promise<void> {
+  if (!rawDataIds.length || !justification || !userId) return
+  const rows = rawDataIds.map((raw_data_id) => ({
+    raw_data_id,
+    validation_status: 'INVALID',
+    invalidation_reason: justification,
+    validated_by: userId,
+    validated_at: new Date().toISOString(),
+  }))
+  await supabase.from('validated_data').upsert(rows, {
+    onConflict: 'raw_data_id',
+    ignoreDuplicates: false,
   })
 }
 
@@ -229,6 +256,7 @@ export function aggregateDataByGranularity(
         validRows.reduce((sum, r) => sum + parseFloat(r.rawValue), 0) / validRows.length
       const firstRow = validRows[0]
       const hasPending = groupRows.some((r) => r.status === 'pending')
+      const allRawDataIds = groupRows.flatMap((r) => r.rawDataIds ?? (r.rawDataId ? [r.rawDataId] : []))
 
       aggregated.push({
         ...firstRow,
@@ -236,6 +264,8 @@ export function aggregateDataByGranularity(
         rawValue: avgValue.toFixed(1),
         finalValue: avgValue.toFixed(1),
         status: hasPending ? 'pending' : 'valid',
+        rawDataIds: allRawDataIds,
+        rawDataId: firstRow.rawDataId,
       })
     })
 

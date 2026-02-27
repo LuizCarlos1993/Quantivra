@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useDataSegregation } from '@/hooks/useDataSegregation'
+import { PARAM_KEY_TO_DISPLAY } from '@/config/stations'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { useAuth } from '@/modules/auth/context/AuthContext'
@@ -72,10 +73,11 @@ export function MainLayout() {
   const currentHeader = PAGE_HEADERS[effectiveMenuItem] ?? PAGE_HEADERS.dashboard
 
   const handleAlertClick = useCallback((station: string, parameter: string) => {
+    const displayParam = PARAM_KEY_TO_DISPLAY[parameter] ?? parameter
     setActiveMenuItem('consistency')
     setConsistencyFilters({
       station,
-      parameter,
+      parameter: displayParam,
       initialTab: 'pending',
       triggerTimestamp: Date.now(),
     })
