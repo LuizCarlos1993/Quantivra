@@ -1,0 +1,36 @@
+@import './fonts.css';
+@import './tailwind.css';
+@import './theme.css';
+@import 'leaflet/dist/leaflet.css';
+
+/* Transições suaves entre páginas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* Animação de dissolve para navegação entre páginas */
+.page-transition {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.page-transition-exit {
+  animation: fadeOut 0.3s ease-in forwards;
+}

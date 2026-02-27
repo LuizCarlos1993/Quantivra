@@ -1,0 +1,46 @@
+---
+description: React component patterns for Quantivra
+globs: src/**/*.tsx
+alwaysApply: false
+---
+
+# React Component Patterns
+
+## Structure
+
+- Functional components only. No class components.
+- Export named functions: `export function DashboardPage() {}`
+- Keep components in `src/modules/<feature>/` for page-level components.
+- Shared components go in `src/components/`.
+
+## Data Loading
+
+Services are async. Use `useState` + `useEffect` for loading:
+
+```typescript
+const [data, setData] = useState<MyType[]>([])
+useEffect(() => {
+  myService.getData().then(setData)
+}, [dependency])
+```
+
+## Hooks
+
+- `useAuth()` - Current user, login/logout.
+- `useDataSegregation()` - `getAccessibleStations()`, `canAccessStation(name)`, `userUnit`.
+- `usePermissions()` - `canEdit`, `canManageUsers`, `isReadOnly`.
+
+## Styling
+
+- Tailwind CSS classes directly on elements.
+- Brand colors: `bg-[#1a3d47]`, `text-[#2C5F6F]`.
+- Cards: `bg-white rounded-lg shadow-sm border border-gray-200 p-4`.
+- Tables: `<thead className="bg-[#1a3d47] text-white">`.
+
+## Notifications
+
+```typescript
+import { toast } from 'sonner'
+toast.success('Operacao realizada')
+toast.error('Erro ao processar')
+```

@@ -1,0 +1,64 @@
+---
+description: Supabase usage patterns for Quantivra
+globs: src/services/**/*.ts
+alwaysApply: false
+---
+
+# Supabase Patterns
+
+## Client
+
+Import from `@/lib/supabase`:
+
+```typescript
+import { supabase } from '@/lib/supabase'
+```
+
+The client uses the anon key. RLS policies filter data by the authenticated user's unit.
+
+## Query Patterns
+
+```typescript
+// Single row
+const { data } = await supabase.from('stations').select('id').eq('name', name).single()
+
+// Optional single row (no error if missing)
+const { data } = await supabase.from('stations').select('*').eq('id', id).maybeSingle()
+
+// List with filters
+const { data } = await supabase
+  .from('raw_data')
+  .select('value, timestamp')
+  .eq('sensor_id', sensorId)
+  .gte('timestamp', since)
+  .order('timestamp', { ascending: true })
+  .limit(500)
+
+// Join via foreign key
+const { data } = await supabase
+  .from('alerts')
+  .select('*, stations(name)')
+  .eq('read', false)
+```
+
+## Tables Reference
+
+Key tables: `stations`, `sensors`, `raw_data`, `validated_data`, `alerts`, `users`, `user_roles`, `roles`, `availability_metrics`, `iqair_results`, `audit_logs`.
+
+Types are defined in `src/types/database.ts`.
+
+## Role ID Map
+
+When the `roles.name` column is unavailable, use this fallback:
+
+```typescript
+const ROLE_ID_MAP = {
+  '1d89d633-75b5-441c-bdcd-c4ff694b1b7a': 'Administrador',
+  '7e08b306-2fac-4026-bd49-2e8d80a1d714': 'Analista',
+  'eb8063e6-414b-4492-b617-33828f73c62f': 'Consulta',
+}
+```
+
+## Service Role Key
+
+For admin operations (scripts only, never in frontend), use `SUPABASE_SERVICE_ROLE_KEY` from `.env`. This bypasses RLS.

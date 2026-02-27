@@ -1,0 +1,35 @@
+---
+description: Quantivra project overview, conventions, and structure
+alwaysApply: true
+---
+
+# Quantivra Project
+
+Air quality monitoring system for refineries. React 18 + TypeScript + Vite + Tailwind CSS 4 + Supabase.
+
+## Architecture
+
+- `src/services/` - Data access layer. All Supabase queries go here. Never put queries in components.
+- `src/hooks/` - Shared React hooks (`useDataSegregation`, `usePermissions`).
+- `src/modules/` - Feature modules (dashboard, consistency, map, reports, users, settings).
+- `src/components/` - Shared UI components (Header, Sidebar, MainLayout).
+- `src/config/` - Constants only (PARAMETERS, PERIODS). No data fetching.
+- `src/types/` - TypeScript interfaces. `database.ts` mirrors the Supabase schema.
+- `src/lib/supabase.ts` - Singleton Supabase client.
+
+## Conventions
+
+- All IDs are UUID strings (from Supabase).
+- User data is segregated by `unit` field. Users only see stations matching their unit.
+- Three user roles: Administrador (full access), Analista (validate data), Consulta (read-only).
+- Permissions are checked via `usePermissions()` hook and `src/config/permissions.ts`.
+- Portuguese is used for UI text. Code (variables, functions) is in English.
+- Brand colors: `--quantivra-dark: #1a3d47`, `--quantivra-teal: #2C5F6F`.
+- Use `toast` from `sonner` for notifications.
+
+## Key Patterns
+
+- Services are async and return data directly (no React Query / SWR).
+- Components use `useState` + `useEffect` for data loading.
+- Navigation is handled by `MainLayout` via `activeMenuItem` state (not React Router routes).
+- The `Header` component fetches alerts from `alertsService` and polls every 60s.
