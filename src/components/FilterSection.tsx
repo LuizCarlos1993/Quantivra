@@ -1,5 +1,6 @@
 import { ChevronDown } from 'lucide-react'
 import { useDataSegregation } from '@/hooks/useDataSegregation'
+import { DatePickerInput } from './DatePickerInput'
 
 interface FilterSectionProps {
   selectedStation: string
@@ -46,12 +47,10 @@ export function FilterSection({
           <label className="text-xs text-gray-600 font-medium">
             Data de Visualização
           </label>
-          <input
-            type="date"
+          <DatePickerInput
             value={selectedDate}
-            onChange={(e) => onDateChange(e.target.value)}
+            onChange={onDateChange}
             max={today}
-            className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm hover:border-[#2C5F6F] focus:outline-none focus:ring-2 focus:ring-[#2C5F6F] focus:border-transparent transition-all cursor-pointer"
           />
         </div>
       </div>

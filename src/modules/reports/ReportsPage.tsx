@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Loader2,
 } from 'lucide-react'
+import { DatePickerInput } from '@/components/DatePickerInput'
 import { useDataSegregation } from '@/hooks/useDataSegregation'
 import { generateDataBetweenDates } from '@/services/consistencyService'
 import { supabase } from '@/lib/supabase'
@@ -329,20 +330,19 @@ export function ReportsPage() {
         <div className="flex items-end gap-4 flex-wrap">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-600 font-medium">Data Inicial</label>
-            <input
-              type="date"
+            <DatePickerInput
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm hover:border-[#2C5F6F] focus:outline-none focus:ring-2 focus:ring-[#2C5F6F] focus:border-transparent transition-all cursor-pointer"
+              onChange={setStartDate}
+              max={endDate}
             />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-600 font-medium">Data Final</label>
-            <input
-              type="date"
+            <DatePickerInput
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm hover:border-[#2C5F6F] focus:outline-none focus:ring-2 focus:ring-[#2C5F6F] focus:border-transparent transition-all cursor-pointer"
+              onChange={setEndDate}
+              min={startDate}
+              max={formatDate(today)}
             />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">

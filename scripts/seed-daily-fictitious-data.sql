@@ -63,6 +63,9 @@ BEGIN
   PERFORM setseed(seed_val);
 
   -- 1. Remover dados existentes do dia (para evitar duplicatas)
+  DELETE FROM validated_data WHERE raw_data_id IN (
+    SELECT id FROM raw_data WHERE measured_at >= day_start AND measured_at < day_end
+  );
   DELETE FROM raw_data
   WHERE measured_at >= day_start AND measured_at < day_end;
 
@@ -85,6 +88,25 @@ BEGIN
       raw_count := raw_count + 1;
     END LOOP;
   END LOOP;
+
+  -- 2b. Simular ~5-6 dados fora da curva por dia (pendentes para o analista)
+  UPDATE raw_data rd SET value = 999.9
+  WHERE rd.id IN (
+    SELECT rd2.id FROM raw_data rd2
+    JOIN sensors s ON s.id = rd2.sensor_id
+    WHERE rd2.measured_at >= day_start AND rd2.measured_at < day_end
+      AND s.parameter IN ('O3', 'NOx', 'SO2', 'CO', 'HCT', 'BTEX', 'MP10', 'MP2.5')
+    ORDER BY random()
+    LIMIT 6
+  );
+
+  -- 2c. Marcar como VALID a maioria (dados dentro da curva)
+  INSERT INTO validated_data (raw_data_id, validation_status)
+  SELECT rd.id, 'VALID'::validation_status_type
+  FROM raw_data rd
+  WHERE rd.measured_at >= day_start AND rd.measured_at < day_end
+    AND rd.value < 900
+  ON CONFLICT (raw_data_id) DO NOTHING;
 
   -- 3. Inserir iqair_results (24 por estação)
   FOR st IN SELECT id FROM stations WHERE status = 'active' LOOP

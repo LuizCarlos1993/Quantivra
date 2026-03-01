@@ -28,15 +28,103 @@ async function resolveRoleName(roleId: string): Promise<string> {
   return data?.name ?? 'Consulta'
 }
 
+function mapRpcToRecord(row: { id: string; email: string; name: string; unit: string; status: string; created_at: string; profile: string }): UserRecord {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    profile: (row.profile || 'Consulta') as UserRecord['profile'],
+    unit: row.unit,
+    status: (row.status || 'Ativo') as UserRecord['status'],
+    createdAt: new Date(row.created_at),
+  }
+}
+
 export const usersService = {
-  async getByUnit(unit: string): Promise<UserRecord[]> {
+  async getAll(): Promise<UserRecord[]> {
+    const { data, error } = await supabase.rpc('list_users_for_admin', { unit_filter: null })
+    if (!error && data?.length) return data.map(mapRpcToRecord)
+    return this.getAllFallback()
+  },
+
+  async getAllFallback(): Promise<UserRecord[]> {
     const { data: users } = await supabase
+      .from('users')
+      .select('id, email, name, unit, status, created_at')
+      .order('created_at', { ascending: false })
+
+    const rows = users ?? []
+    if (!rows.length) {
+      const { data: minimal } = await supabase.from('users').select('id, email, name, unit')
+      if (!minimal?.length) return []
+      rows.push(...minimal.map((u) => ({ ...u, status: 'Ativo', created_at: new Date().toISOString() })))
+    }
+
+    const userIds = rows.map((u) => u.id)
+    const { data: roleRows } = await supabase
+      .from('user_roles')
+      .select('user_id, role_id')
+      .in('user_id', userIds)
+
+    const userRoleMap = new Map<string, string>()
+    for (const row of roleRows ?? []) {
+      userRoleMap.set(row.user_id, row.role_id)
+    }
+
+    const results: UserRecord[] = []
+    for (const user of rows) {
+      const roleId = userRoleMap.get(user.id)
+      const profile = roleId ? await resolveRoleName(roleId) : 'Consulta'
+
+      results.push({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        profile: profile as UserRecord['profile'],
+        unit: user.unit,
+        status: ((user as { status?: string }).status as UserRecord['status']) ?? 'Ativo',
+        createdAt: new Date((user as { created_at?: string }).created_at ?? Date.now()),
+      })
+    }
+
+    return results
+  },
+
+  async getAllUnits(): Promise<string[]> {
+    const { data, error } = await supabase.rpc('list_users_for_admin', { unit_filter: null })
+    let fromUsers: string[] = []
+    if (!error && data?.length) fromUsers = data.map((r: { unit?: string }) => r.unit).filter(Boolean)
+    else {
+      const { data: userRows } = await supabase.from('users').select('unit')
+      fromUsers = (userRows ?? []).map((r) => r.unit).filter(Boolean)
+    }
+    const { data: stationUnits } = await supabase.from('stations').select('unit')
+    const fromStations = (stationUnits ?? []).map((r) => r.unit).filter(Boolean)
+    return [...new Set([...fromUsers, ...fromStations])].sort()
+  },
+
+  async getByUnit(unit: string): Promise<UserRecord[]> {
+    const { data, error } = await supabase.rpc('list_users_for_admin', { unit_filter: unit })
+    if (!error) return (data ?? []).map(mapRpcToRecord)
+    return this.getByUnitFallback(unit)
+  },
+
+  async getByUnitFallback(unit: string): Promise<UserRecord[]> {
+    const { data: usersData } = await supabase
       .from('users')
       .select('id, email, name, unit, status, created_at')
       .eq('unit', unit)
       .order('created_at', { ascending: false })
 
-    if (!users?.length) return []
+    let users = usersData ?? []
+    if (!users.length) {
+      const { data: minimal } = await supabase
+        .from('users')
+        .select('id, email, name, unit')
+        .eq('unit', unit)
+      users = (minimal ?? []).map((u) => ({ ...u, status: 'Ativo', created_at: new Date().toISOString() }))
+    }
+    if (!users.length) return []
 
     const userIds = users.map((u) => u.id)
     const { data: roleRows } = await supabase

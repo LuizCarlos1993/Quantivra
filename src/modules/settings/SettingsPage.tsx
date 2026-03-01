@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Settings, Save, Database, Clock, Wifi, ChevronDown } from 'lucide-react'
+import { TimePickerInput } from '@/components/TimePickerInput'
 import { useDataSegregation } from '@/hooks/useDataSegregation'
 import { toast } from 'sonner'
 
@@ -107,11 +108,10 @@ export function SettingsPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-2">Horário de Sincronização</label>
-              <input
-                type="time"
+              <TimePickerInput
                 value={syncTime}
-                onChange={(e) => setSyncTime(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-sm hover:border-[#2C5F6F] focus:outline-none focus:ring-2 focus:ring-[#2C5F6F] focus:border-transparent transition-all"
+                onChange={setSyncTime}
+                buttonClassName="py-2.5"
               />
               <p className="text-xs text-gray-500 mt-1.5">
                 Horário diário para sincronização e processamento em lote

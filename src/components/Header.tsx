@@ -31,6 +31,7 @@ export function Header({ title, subtitle, onAlertClick }: HeaderProps) {
   const profileButtonRef = useRef<HTMLButtonElement>(null)
 
   const loadAlerts = useCallback(async () => {
+    await alertsService.ensureAlertsForPendingData(canAccessStation)
     const data = await alertsService.getUnreadAlerts(canAccessStation)
     setAlerts(data)
   }, [canAccessStation])

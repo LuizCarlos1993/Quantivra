@@ -219,4 +219,148 @@ export const stationsService = {
 
     return result
   },
+
+  async createStation(data: {
+    name: string
+    code?: string
+    lat: number
+    lng: number
+    unit: string
+    status?: string
+  }): Promise<{ id: string; code: string }> {
+    let code = data.code
+    if (!code) {
+      const { data: codes } = await supabase.from('stations').select('code').order('code')
+      const nums = (codes ?? [])
+        .map((r) => parseInt(String(r.code).replace(/^#/, ''), 10))
+        .filter((n) => !isNaN(n))
+      const max = nums.length ? Math.max(...nums) : 0
+      code = `#${max + 1}`
+    }
+    const statusDb = mapStatusUiToDb(data.status ?? 'Ativa')
+    const { data: network } = await supabase.from('networks').select('id').limit(1).maybeSingle()
+    const { data: row, error } = await supabase
+      .from('stations')
+      .insert({
+        name: data.name,
+        code,
+        lat: data.lat,
+        lng: data.lng,
+        unit: data.unit,
+        status: statusDb,
+        network_id: network?.id ?? null,
+      })
+      .select('id, code')
+      .single()
+    if (error || !row) throw new Error(error?.message ?? 'Failed to create station')
+    return { id: row.id, code }
+  },
+
+  async updateStation(
+    id: string,
+    data: { name?: string; lat?: number; lng?: number; status?: string }
+  ): Promise<void> {
+    const updates: Record<string, unknown> = {}
+    if (data.name != null) updates.name = data.name
+    if (data.lat != null) updates.lat = data.lat
+    if (data.lng != null) updates.lng = data.lng
+    if (data.status != null) updates.status = mapStatusUiToDb(data.status)
+    if (Object.keys(updates).length === 0) return
+    const { error } = await supabase.from('stations').update(updates).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  async deleteStation(id: string): Promise<void> {
+    const { error } = await supabase.from('stations').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  async getSensorsByStationId(stationId: string): Promise<Array<{
+    id: string
+    parameter: string
+    brand: string
+    model: string
+    serial: string
+    status: string
+  }>> {
+    const { data } = await supabase
+      .from('sensors')
+      .select('id, parameter, brand, model, serial, status')
+      .eq('station_id', stationId)
+      .order('parameter')
+    return (data ?? []).map((r) => ({
+      id: r.id,
+      parameter: r.parameter ?? '',
+      brand: r.brand ?? '',
+      model: r.model ?? '',
+      serial: r.serial ?? '',
+      status: r.status ?? 'active',
+    }))
+  },
+
+  async createSensor(
+    stationId: string,
+    data: { parameter: string; brand?: string; model?: string; serial?: string }
+  ): Promise<{ id: string }> {
+    const paramDb = mapParameterUiToDb(data.parameter)
+    const { data: row, error } = await supabase
+      .from('sensors')
+      .insert({
+        station_id: stationId,
+        parameter: paramDb,
+        name: data.parameter,
+        brand: data.brand ?? 'N/A',
+        model: data.model ?? 'N/A',
+        serial: data.serial ?? '',
+        status: 'active',
+      })
+      .select('id')
+      .single()
+    if (error || !row) throw new Error(error?.message ?? 'Failed to create sensor')
+    return { id: row.id }
+  },
+
+  async updateSensor(
+    id: string,
+    data: { parameter?: string; brand?: string; model?: string; serial?: string }
+  ): Promise<void> {
+    const updates: Record<string, unknown> = {}
+    if (data.parameter != null) updates.parameter = mapParameterUiToDb(data.parameter)
+    if (data.parameter != null) updates.name = data.parameter
+    if (data.brand != null) updates.brand = data.brand
+    if (data.model != null) updates.model = data.model
+    if (data.serial != null) updates.serial = data.serial
+    if (Object.keys(updates).length === 0) return
+    const { error } = await supabase.from('sensors').update(updates).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  async deleteSensor(id: string): Promise<void> {
+    const { error } = await supabase.from('sensors').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+}
+
+function mapStatusUiToDb(ui: string): string {
+  const m: Record<string, string> = { Ativa: 'active', Manutenção: 'maintenance', Inativa: 'inactive' }
+  return m[ui] ?? 'active'
+}
+
+function mapParameterUiToDb(ui: string): string {
+  const m: Record<string, string> = {
+    'O₃': 'O3',
+    'MP₁₀': 'MP10',
+    'MP₂.₅': 'MP2.5',
+    'SO₂': 'SO2',
+    O3: 'O3',
+    MP10: 'MP10',
+    'MP2.5': 'MP2.5',
+    SO2: 'SO2',
+    NOx: 'NOx',
+    CO: 'CO',
+    HCT: 'HCT',
+    BTEX: 'BTEX',
+  }
+  if (m[ui]) return m[ui]
+  return ui.replace(/₀/g, '0').replace(/₁/g, '1').replace(/₂/g, '2').replace(/₃/g, '3').replace(/₅/g, '5')
 }

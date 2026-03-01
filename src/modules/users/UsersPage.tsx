@@ -23,10 +23,11 @@ const profileIcons = {
 
 export function UsersPage() {
   const { canManageUsers } = usePermissions()
-  const { userUnit, getAccessibleUnits } = useDataSegregation()
+  const { userUnit } = useDataSegregation()
   const [users, setUsers] = useState<UserRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedUnit, setSelectedUnit] = useState('')
+  const [allUnits, setAllUnits] = useState<string[]>([])
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [userModalOpen, setUserModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
@@ -34,22 +35,35 @@ export function UsersPage() {
   const [userToDelete, setUserToDelete] = useState<UserRecord | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
 
-  const accessibleUnits = getAccessibleUnits()
-  const effectiveUnit = selectedUnit || userUnit || accessibleUnits[0] || ''
+  const ALL_UNITS_LABEL = 'Todas as unidades'
+  const effectiveUnit = selectedUnit || userUnit || allUnits[0] || ''
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     try {
-      const list = effectiveUnit ? await usersService.getByUnit(effectiveUnit) : []
-      setUsers(list)
+      if (effectiveUnit === ALL_UNITS_LABEL) {
+        const list = await usersService.getAll()
+        setUsers(list)
+      } else {
+        const list = effectiveUnit ? await usersService.getByUnit(effectiveUnit) : []
+        setUsers(list)
+      }
     } finally {
       setLoading(false)
     }
   }, [effectiveUnit])
 
   useEffect(() => {
-    if (!selectedUnit && userUnit) setSelectedUnit(userUnit)
-  }, [userUnit, selectedUnit])
+    if (canManageUsers) {
+      usersService.getAllUnits().then((units) => setAllUnits(units))
+    }
+  }, [canManageUsers])
+
+  useEffect(() => {
+    if (selectedUnit) return
+    if (canManageUsers && allUnits.length > 0) setSelectedUnit(ALL_UNITS_LABEL)
+    else if (userUnit) setSelectedUnit(userUnit)
+  }, [userUnit, selectedUnit, allUnits, canManageUsers])
 
   useEffect(() => {
     loadUsers()
@@ -168,8 +182,17 @@ export function UsersPage() {
             </button>
 
             {isDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-[240px] bg-white border border-gray-200 rounded-lg shadow-xl z-10 overflow-hidden">
-                {accessibleUnits.map((unit) => (
+              <div className="absolute right-0 mt-2 w-[240px] bg-white border border-gray-200 rounded-lg shadow-xl z-10 overflow-hidden max-h-64 overflow-y-auto">
+                <button
+                  type="button"
+                  onClick={() => handleUnitChange(ALL_UNITS_LABEL)}
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors border-b border-gray-100 ${
+                    effectiveUnit === ALL_UNITS_LABEL ? 'bg-[#2C5F6F] text-white font-semibold' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {ALL_UNITS_LABEL}
+                </button>
+                {allUnits.map((unit) => (
                   <button
                     key={unit}
                     type="button"

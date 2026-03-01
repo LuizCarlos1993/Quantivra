@@ -1,65 +1,21 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import L from 'leaflet'
-import { MapPin, Layers } from 'lucide-react'
+import { MapPin, Layers, Trash2 } from 'lucide-react'
+import { DatePickerInput } from '@/components/DatePickerInput'
 import { useDataSegregation } from '@/hooks/useDataSegregation'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAuth } from '@/modules/auth/context/AuthContext'
 import { stationsService, type MapStation } from '@/services/stationsService'
 import { toast } from 'sonner'
+import { DeleteStationModal } from './components/DeleteStationModal'
 
 interface Sensor {
-  id: number
+  id: string | number
   parameter: string
   brand: string
   model: string
   serial: string
   status: 'active' | 'maintenance' | 'inactive'
-}
-
-const stationSensors: Record<string, Sensor[]> = {
-  1: [
-    { id: 1, parameter: 'O₃', brand: 'Thermo', model: '49i', serial: 'S/N: T2941', status: 'active' },
-    { id: 2, parameter: 'NOx', brand: 'Horiba', model: 'APNA-370', serial: 'S/N: H2942', status: 'active' },
-    { id: 3, parameter: 'MP₁₀', brand: 'Met One', model: 'BAM-1020', serial: 'S/N: M2943', status: 'active' },
-    { id: 4, parameter: 'BTEX', brand: 'Syntech', model: 'Spectras GC955', serial: 'S/N: S2944', status: 'active' },
-  ],
-  2: [
-    { id: 1, parameter: 'MP₁₀', brand: 'Met One', model: 'BAM-1020', serial: 'S/N: A4522', status: 'active' },
-    { id: 2, parameter: 'NOx', brand: 'Horiba', model: 'APNA-370', serial: 'S/N: H3178', status: 'active' },
-    { id: 3, parameter: 'O₃', brand: 'Thermo', model: '49i', serial: 'S/N: T3179', status: 'active' },
-    { id: 4, parameter: 'HCT', brand: 'Teledyne', model: 'T300', serial: 'S/N: TD3180', status: 'active' },
-  ],
-  3: [
-    { id: 1, parameter: 'SO₂', brand: 'Thermo', model: '43i', serial: 'S/N: T9981', status: 'active' },
-    { id: 2, parameter: 'CO', brand: 'Thermo', model: '48i', serial: 'S/N: T9982', status: 'active' },
-    { id: 3, parameter: 'MP₁₀', brand: 'Met One', model: 'BAM-1020', serial: 'S/N: A4522', status: 'active' },
-    { id: 4, parameter: 'MP₂.₅', brand: 'Met One', model: 'BAM-1022', serial: 'S/N: A4523', status: 'active' },
-    { id: 5, parameter: 'NOx', brand: 'Horiba', model: 'APNA-370', serial: 'S/N: H3180', status: 'active' },
-    { id: 6, parameter: 'O₃', brand: 'Thermo', model: '49i', serial: 'S/N: T3181', status: 'active' },
-  ],
-  4: [
-    { id: 1, parameter: 'MP₁₀', brand: 'Thermo Fisher', model: 'TEOM 1405', serial: 'S/N: TF4851', status: 'active' },
-    { id: 2, parameter: 'NOx', brand: 'Horiba', model: 'APNA-370', serial: 'S/N: H4853', status: 'active' },
-    { id: 3, parameter: 'O₃', brand: 'Thermo', model: '49i', serial: 'S/N: T4855', status: 'active' },
-    { id: 4, parameter: 'SO₂', brand: 'Thermo', model: '43i', serial: 'S/N: T4856', status: 'active' },
-    { id: 5, parameter: 'BTEX', brand: 'Syntech', model: 'Spectras GC955', serial: 'S/N: S4857', status: 'active' },
-  ],
-  5: [
-    { id: 1, parameter: 'MP₁₀', brand: 'Met One', model: 'BAM-1020', serial: 'S/N: M5681', status: 'active' },
-    { id: 2, parameter: 'NOx', brand: 'Teledyne', model: 'T200', serial: 'S/N: TD5683', status: 'active' },
-    { id: 3, parameter: 'O₃', brand: 'Horiba', model: 'APOA-370', serial: 'S/N: H5685', status: 'active' },
-  ],
-  6: [
-    { id: 1, parameter: 'O₃', brand: 'Thermo', model: '49i', serial: 'S/N: T7001', status: 'active' },
-    { id: 2, parameter: 'NOx', brand: 'Horiba', model: 'APNA-370', serial: 'S/N: H7002', status: 'active' },
-    { id: 3, parameter: 'SO₂', brand: 'Thermo', model: '43i', serial: 'S/N: T7003', status: 'active' },
-    { id: 4, parameter: 'CO', brand: 'Thermo', model: '48i', serial: 'S/N: T7004', status: 'active' },
-  ],
-}
-
-function getCurrentDateTime(): string {
-  const now = new Date()
-  return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`
 }
 
 function getStatusColor(status: string): string {
@@ -223,10 +179,12 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
   const [activeTab, setActiveTab] = useState<'location' | 'sensors'>('location')
   const [isSensorModalOpen, setIsSensorModalOpen] = useState(false)
   const [currentSensors, setCurrentSensors] = useState<Sensor[]>([])
-  const [editingSensorId, setEditingSensorId] = useState<number | null>(null)
+  const [editingSensorId, setEditingSensorId] = useState<string | number | null>(null)
   const [mapTileLayer, setMapTileLayer] = useState<'satellite' | 'street'>('satellite')
   const [isLayersMenuOpen, setIsLayersMenuOpen] = useState(false)
   const [wmsLayers, setWmsLayers] = useState({ topography: false, wildfires: false })
+  const [stationsRefreshTrigger, setStationsRefreshTrigger] = useState(0)
+  const [deleteStationModalOpen, setDeleteStationModalOpen] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     latitude: '',
@@ -239,7 +197,6 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
     serial: '',
     installDate: '',
   })
-  const customSensorsRef = useRef<Record<string, Sensor[]>>({})
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<L.Marker[]>([])
@@ -251,10 +208,14 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
   onNavigateRef.current = onNavigateToConsistency
   isSelectingRef.current = isSelectingLocation
 
-  useEffect(() => {
+  const loadStations = useCallback(() => {
     const accessible = getAccessibleStations()
     stationsService.getStationsFilteredByUnit((name) => accessible.includes(name)).then(setStations)
   }, [getAccessibleStations])
+
+  useEffect(() => {
+    loadStations()
+  }, [loadStations, stationsRefreshTrigger])
 
   useEffect(() => {
     if (!mapContainerRef.current) return
@@ -292,28 +253,43 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
 
       marker.on('popupopen', (e) => {
         setSelectedStation(station)
-        const popupEl = (e.popup as unknown as { _contentNode?: HTMLElement })._contentNode
-        const container = popupEl ?? document.querySelector('.leaflet-popup-content')
+        const container = e.popup.getElement()?.querySelector('.leaflet-popup-content')
         if (!container) return
 
         const analyzeBtn = container.querySelector('.popup-analyze-btn')
         analyzeBtn?.addEventListener('click', () => onNavigateRef.current(station.name))
 
         if (canConfigureStations) {
-          const editBtn = container.querySelector('.popup-edit-btn')
-          editBtn?.addEventListener('click', () => {
+          const editBtn = container.querySelector<HTMLButtonElement>('.popup-edit-btn')
+          editBtn?.addEventListener('click', (ev) => {
+            ev.preventDefault()
+            ev.stopPropagation()
+            const stationToEdit = station
             marker.closePopup()
-            setEditingStation(station)
-            setIsEditMode(true)
-            setFormData({
-              name: station.name,
-              latitude: station.lat.toString(),
-              longitude: station.lng.toString(),
-              status: 'Ativa',
+            requestAnimationFrame(() => {
+              setEditingStation(stationToEdit)
+              setIsEditMode(true)
+              setFormData({
+                name: stationToEdit.name,
+                latitude: stationToEdit.lat.toString(),
+                longitude: stationToEdit.lng.toString(),
+                status: 'Ativa',
+              })
+              setActiveTab('location')
+              setIsModalOpen(true)
+              stationsService.getSensorsByStationId(stationToEdit.id).then((dbSensors) => {
+                setCurrentSensors(
+                  dbSensors.map((s) => ({
+                    id: s.id,
+                    parameter: s.parameter,
+                    brand: s.brand,
+                    model: s.model,
+                    serial: s.serial,
+                    status: (s.status === 'maintenance' ? 'maintenance' : s.status === 'inactive' ? 'inactive' : 'active') as Sensor['status'],
+                  }))
+                )
+              }).catch(() => setCurrentSensors([]))
             })
-            setCurrentSensors(customSensorsRef.current[station.id] ?? stationSensors[station.id] ?? [])
-            setActiveTab('location')
-            setIsModalOpen(true)
           })
         }
       })
@@ -510,6 +486,7 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
     setIsModalOpen(false)
     setIsEditMode(false)
     setEditingStation(null)
+    setDeleteStationModalOpen(false)
     setActiveTab('location')
   }
 
@@ -518,56 +495,71 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSaveStation = () => {
-    if (isEditMode && editingStation) {
-      const updatedStation: MapStation = {
-        ...editingStation,
-        name: formData.name,
-        lat: parseFloat(formData.latitude),
-        lng: parseFloat(formData.longitude),
-        lastUpdate: getCurrentDateTime(),
+  const handleSaveStation = async () => {
+    const lat = parseFloat(formData.latitude)
+    const lng = parseFloat(formData.longitude)
+    const unit = user?.unit || 'Unidade SP'
+    try {
+      if (isEditMode && editingStation) {
+        await stationsService.updateStation(editingStation.id, {
+          name: formData.name,
+          lat,
+          lng,
+          status: formData.status,
+        })
+        const existingIds = new Set(
+          currentSensors.filter((s) => typeof s.id === 'string').map((s) => s.id as string)
+        )
+        const dbSensors = await stationsService.getSensorsByStationId(editingStation.id)
+        const dbIds = new Set(dbSensors.map((s) => s.id))
+        for (const s of currentSensors) {
+          if (typeof s.id === 'string' && dbIds.has(s.id)) {
+            await stationsService.updateSensor(s.id as string, {
+              parameter: s.parameter,
+              brand: s.brand,
+              model: s.model,
+              serial: s.serial,
+            })
+          } else if (typeof s.id === 'number') {
+            const [brand, ...modelParts] = (s.brand + ' ' + s.model).split(' ')
+            await stationsService.createSensor(editingStation.id, {
+              parameter: s.parameter,
+              brand: brand || 'N/A',
+              model: modelParts.join(' ') || 'N/A',
+              serial: s.serial,
+            })
+          }
+        }
+        for (const dbId of dbIds) {
+          if (!existingIds.has(dbId)) await stationsService.deleteSensor(dbId)
+        }
+        toast.success(`Estação "${formData.name}" atualizada com sucesso!`, {
+          description: `Lat: ${formData.latitude}° • Long: ${formData.longitude}°`,
+        })
+      } else {
+        const { id: newId } = await stationsService.createStation({
+          name: formData.name,
+          lat,
+          lng,
+          unit,
+          status: formData.status,
+        })
+        for (const s of currentSensors) {
+          const [brand, ...modelParts] = (s.brand + ' ' + s.model).split(' ')
+          await stationsService.createSensor(newId, {
+            parameter: s.parameter,
+            brand: brand || 'N/A',
+            model: modelParts.join(' ') || 'N/A',
+            serial: s.serial || 'S/N: BR-8821',
+          })
+        }
+        toast.success(`Estação "${formData.name}" cadastrada com sucesso!`)
       }
-      setStations((prev) => prev.map((s) => (s.id === editingStation.id ? updatedStation : s)))
-      customSensorsRef.current[editingStation.id] = currentSensors
-      const marker = markersRef.current.find(
-        (m) => (m as L.Marker & { stationId?: string }).stationId === editingStation.id
-      )
-      if (marker) {
-        marker.setLatLng([updatedStation.lat, updatedStation.lng])
-        const m = marker as L.Marker & { stationData?: MapStation }
-        m.stationData = updatedStation
-        marker.setIcon(createCustomIcon(updatedStation, selectedStation?.id === updatedStation.id))
-        marker.setPopupContent(createPopupContent(updatedStation, canConfigureStations))
-      }
-      toast.success(`Estação "${formData.name}" atualizada com sucesso!`, {
-        description: `Lat: ${formData.latitude}° • Long: ${formData.longitude}°`,
-      })
-    } else {
-      const maxCode = Math.max(...stations.map((s) => parseInt(s.code.replace('#', ''), 10)), 0)
-      const newId = crypto.randomUUID()
-      const newStation: MapStation = {
-        id: newId,
-        code: `#${maxCode + 1}`,
-        name: formData.name,
-        lat: parseFloat(formData.latitude),
-        lng: parseFloat(formData.longitude),
-        status: 'good',
-        pm10: 0,
-        wind: 'N',
-        windSpeed: 0,
-        windDirection: 0,
-        lastUpdate: getCurrentDateTime(),
-        iqar: 0,
-        iqarLabel: 'BOA',
-        unit: user?.unit || 'Unidade SP',
-        parameters: [],
-        trend: [0, 0, 0, 0, 0, 0],
-      }
-      setStations((prev) => [...prev, newStation])
-      customSensorsRef.current[newId] = [...currentSensors]
-      toast.success(`Estação "${formData.name}" cadastrada com sucesso!`)
+      handleCloseModal()
+      setStationsRefreshTrigger((k) => k + 1)
+    } catch (e) {
+      toast.error((e as Error)?.message ?? 'Erro ao salvar estação')
     }
-    handleCloseModal()
   }
 
   const handleOpenSensorModal = () => {
@@ -597,29 +589,63 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
     setSensorFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSaveSensor = () => {
-    if (editingSensorId !== null) {
-      setCurrentSensors((prev) =>
-        prev.map((s) => {
-          if (s.id !== editingSensorId) return s
-          const [brand, ...modelParts] = (sensorFormData.manufacturer || '').split(' ')
-          return {
-            ...s,
+  const handleSaveSensor = async () => {
+    const [brand, ...modelParts] = (sensorFormData.manufacturer || '').split(' ')
+    const brandVal = brand || 'N/A'
+    const modelVal = modelParts.join(' ') || 'N/A'
+    const serialVal = sensorFormData.serial || 'S/N: BR-8821'
+    if (editingStation && editingSensorId !== null) {
+      if (typeof editingSensorId === 'string') {
+        try {
+          await stationsService.updateSensor(editingSensorId, {
             parameter: sensorFormData.parameter,
-            brand: brand || s.brand,
-            model: modelParts.join(' ') || s.model,
-            serial: sensorFormData.serial,
-          }
+            brand: brandVal,
+            model: modelVal,
+            serial: serialVal,
+          })
+          setCurrentSensors((prev) =>
+            prev.map((s) =>
+              s.id === editingSensorId
+                ? { ...s, parameter: sensorFormData.parameter, brand: brandVal, model: modelVal, serial: serialVal }
+                : s
+            )
+          )
+          toast.success('Sensor atualizado com sucesso!')
+        } catch (e) {
+          toast.error((e as Error)?.message ?? 'Erro ao atualizar sensor')
+        }
+      } else {
+        setCurrentSensors((prev) =>
+          prev.map((s) =>
+            s.id === editingSensorId
+              ? { ...s, parameter: sensorFormData.parameter, brand: brandVal, model: modelVal, serial: serialVal }
+              : s
+          )
+        )
+      }
+    } else if (editingStation && editingSensorId === null) {
+      try {
+        const { id } = await stationsService.createSensor(editingStation.id, {
+          parameter: sensorFormData.parameter,
+          brand: brandVal,
+          model: modelVal,
+          serial: serialVal,
         })
-      )
+        setCurrentSensors((prev) => [
+          ...prev,
+          { id, parameter: sensorFormData.parameter, brand: brandVal, model: modelVal, serial: serialVal, status: 'active' as const },
+        ])
+        toast.success('Sensor adicionado com sucesso!')
+      } catch (e) {
+        toast.error((e as Error)?.message ?? 'Erro ao adicionar sensor')
+      }
     } else {
-      const [brand, ...modelParts] = (sensorFormData.manufacturer || '').split(' ')
       const newSensor: Sensor = {
         id: currentSensors.length + 1,
         parameter: sensorFormData.parameter,
-        brand: brand || 'N/A',
-        model: modelParts.join(' ') || 'N/A',
-        serial: sensorFormData.serial || 'S/N: BR-8821',
+        brand: brandVal,
+        model: modelVal,
+        serial: serialVal,
         status: 'maintenance',
       }
       setCurrentSensors((prev) => [...prev, newSensor])
@@ -627,12 +653,34 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
     handleCloseSensorModal()
   }
 
-  const handleDeleteSensor = () => {
-    if (editingSensorId === null) return
-    if (window.confirm('Tem certeza que deseja excluir este sensor? Esta ação não pode ser desfeita.')) {
-      setCurrentSensors((prev) => prev.filter((s) => s.id !== editingSensorId))
-      handleCloseSensorModal()
+  const handleConfirmDeleteStation = async () => {
+    if (!editingStation) return
+    try {
+      await stationsService.deleteStation(editingStation.id)
+      toast.success(`Estação "${editingStation.name}" excluída com sucesso!`)
+      setDeleteStationModalOpen(false)
+      handleCloseModal()
+      setStationsRefreshTrigger((k) => k + 1)
+    } catch (e) {
+      toast.error((e as Error)?.message ?? 'Erro ao excluir estação')
     }
+  }
+
+  const handleDeleteSensor = async () => {
+    if (editingSensorId === null) return
+    if (!window.confirm('Tem certeza que deseja excluir este sensor? Esta ação não pode ser desfeita.')) return
+    if (typeof editingSensorId === 'string' && editingStation) {
+      try {
+        await stationsService.deleteSensor(editingSensorId)
+        setCurrentSensors((prev) => prev.filter((s) => s.id !== editingSensorId))
+        toast.success('Sensor excluído com sucesso!')
+      } catch (e) {
+        toast.error((e as Error)?.message ?? 'Erro ao excluir sensor')
+      }
+    } else {
+      setCurrentSensors((prev) => prev.filter((s) => s.id !== editingSensorId))
+    }
+    handleCloseSensorModal()
   }
 
   return (
@@ -1062,21 +1110,35 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
               )}
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-end gap-3 border-t border-gray-200">
-              <button
-                type="button"
-                className="px-5 py-2.5 bg-gray-400 hover:bg-gray-500 text-white font-medium rounded-lg transition-colors"
-                onClick={handleCloseModal}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="px-5 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white font-medium rounded-lg transition-colors shadow-md"
-                onClick={handleSaveStation}
-              >
-                {isEditMode ? '✓ Editar Estação' : '✓ Salvar Estação'}
-              </button>
+            <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-between gap-3 border-t border-gray-200">
+              <div>
+                {isEditMode && editingStation && (
+                  <button
+                    type="button"
+                    className="px-5 py-2.5 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                    onClick={() => setDeleteStationModalOpen(true)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir Estação
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="px-5 py-2.5 bg-gray-400 hover:bg-gray-500 text-white font-medium rounded-lg transition-colors"
+                  onClick={handleCloseModal}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="px-5 py-2.5 bg-[#22c55e] hover:bg-[#16a34a] text-white font-medium rounded-lg transition-colors shadow-md"
+                  onClick={handleSaveStation}
+                >
+                  {isEditMode ? '✓ Editar Estação' : '✓ Salvar Estação'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1160,12 +1222,12 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Data de Instalação <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
-                  name="installDate"
+                <DatePickerInput
                   value={sensorFormData.installDate}
-                  onChange={handleSensorInputChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a3d47] focus:border-transparent text-gray-900"
+                  onChange={(date) => setSensorFormData((prev) => ({ ...prev, installDate: date }))}
+                  max={new Date().toISOString().split('T')[0]}
+                  buttonClassName="py-2.5"
+                  portal
                 />
               </div>
 
@@ -1230,6 +1292,13 @@ export function MapPage({ onNavigateToConsistency }: MapPageProps) {
           </div>
         </div>
       )}
+
+      <DeleteStationModal
+        isOpen={deleteStationModalOpen}
+        onClose={() => setDeleteStationModalOpen(false)}
+        onConfirm={handleConfirmDeleteStation}
+        stationName={editingStation?.name ?? ''}
+      />
     </>
   )
 }

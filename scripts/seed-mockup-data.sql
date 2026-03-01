@@ -230,6 +230,24 @@ BEGIN
   END IF;
 END $$;
 
+-- 6b. Simular dados fora da curva: ~5-6 por dia ficam pendentes (erro de sensor/calibração)
+-- Na produção, só dados impossíveis geram alerta; a maioria é auto-validada.
+WITH out_of_curve AS (
+  SELECT rd.id FROM raw_data rd
+  JOIN sensors s ON s.id = rd.sensor_id
+  WHERE s.parameter IN ('O3', 'NOx', 'SO2', 'CO', 'HCT', 'BTEX', 'MP10', 'MP2.5')
+  ORDER BY random()
+  LIMIT 35  -- ~5 por dia x 7 dias
+)
+UPDATE raw_data SET value = 999.9 WHERE id IN (SELECT id FROM out_of_curve);
+
+-- 6c. Marcar como VALID a maioria (dados dentro da curva) - ~99% dos dados
+INSERT INTO validated_data (raw_data_id, validation_status)
+SELECT rd.id, 'VALID'::validation_status_type
+FROM raw_data rd
+WHERE rd.value < 900
+ON CONFLICT (raw_data_id) DO NOTHING;
+
 -- ============================================
 -- 7. Seed availability_metrics (últimos 30 dias - mockup stationScenarios)
 -- ============================================
@@ -291,17 +309,12 @@ BEGIN
 END $$;
 
 -- ============================================
--- 9. Seed alerts (Header allAlerts do mockup)
+-- 9. Seed alerts (poucos – refletem os ~5-6 pendentes/dia)
 -- ============================================
--- Alertas com parâmetros que existem na estação (para clicar e abrir Consistência)
+-- Na produção: alertas só para dados fora da curva. Aqui, 2-3 exemplos.
 INSERT INTO alerts (station_id, parameter, type, message, severity, read, created_at) VALUES
-  ('b1000000-0000-0000-0000-000000000001', 'MP10', 'threshold_exceeded', 'Valor elevado de MP₁₀ - Requer validação', 'critical', false, now() - interval '5 minutes'),
-  ('b1000000-0000-0000-0000-000000000001', 'MP10', 'anomaly', 'Valor suspeito de MP₁₀ - Pendente invalidação', 'warning', false, now() - interval '8 minutes'),
-  ('b1000000-0000-0000-0000-000000000001', 'O3', 'anomaly', 'Valor Suspeito: O₃ (125.0 µg/m³)', 'warning', false, now() - interval '10 minutes'),
-  ('b1000000-0000-0000-0000-000000000003', 'MP10', 'anomaly', 'Anomalia Crítica: MP₁₀ (999.9 µg/m³)', 'critical', false, now() - interval '8 minutes'),
-  ('b1000000-0000-0000-0000-000000000003', 'SO2', 'threshold_exceeded', 'Valor Elevado: SO₂ (180.0 µg/m³)', 'warning', false, now() - interval '9 minutes'),
-  ('b1000000-0000-0000-0000-000000000002', 'O3', 'flatline', 'Ausência de dados / Flatline em O₃', 'warning', false, now() - interval '12 minutes'),
-  ('b1000000-0000-0000-0000-000000000003', 'CO', 'threshold_exceeded', 'Valor Elevado: CO (8.5 ppm)', 'warning', false, now() - interval '18 minutes'),
-  ('b1000000-0000-0000-0000-000000000004', 'NOx', 'calibration', 'Período de Calibração Detectado em NOx', 'info', false, now() - interval '15 minutes');
+  ('b1000000-0000-0000-0000-000000000001', 'MP10', 'anomaly', 'Valor fora da curva: MP₁₀ (999.9 µg/m³) - Requer validação', 'critical', false, now() - interval '5 minutes'),
+  ('b1000000-0000-0000-0000-000000000003', 'MP10', 'anomaly', 'Dado impossível: MP₁₀ - Pendente invalidação', 'warning', false, now() - interval '12 minutes'),
+  ('b1000000-0000-0000-0000-000000000002', 'O3', 'anomaly', 'Valor suspeito: O₃ - Erro de sensor ou calibração', 'warning', false, now() - interval '18 minutes');
 
 SELECT 'Seed mockup concluído! Dados fictícios do Figma carregados.' AS result;

@@ -27,11 +27,12 @@ Execute no Supabase Dashboard > SQL Editor. Pré-requisito: `setup-database.sql`
 Inclui:
 - 3 redes, 6 estações, sensores (brand/model/serial do mockup)
 - raw_data (7 dias), availability_metrics (30 dias), iqair_results (7 dias)
-- 8 alertas do Header do mockup (SO2, MP10, O3 flatline, CO, NOx calibração)
+- Lógica realista: ~99% dos dados validados (VÁLIDO); ~5–6 por dia pendentes (dados fora da curva)
+- 2–3 alertas (refletem os poucos pendentes para o analista)
 
 ## seed-daily-fictitious-data.sql
 
-Script que cria a função `seed_daily_fictitious_data(p_target_date)` e gera dados fictícios para o dia especificado (raw_data, iqair_results, availability_metrics). Valores variam por dia (aleatório determinístico).
+Script que cria a função `seed_daily_fictitious_data(p_target_date)` e gera dados fictícios para o dia especificado (raw_data, iqair_results, availability_metrics). Valores variam por dia (aleatório determinístico). Segue a lógica realista: maioria validada automaticamente, ~5–6 pendentes/dia (dados fora da curva).
 
 **Execução manual:**
 ```sql
